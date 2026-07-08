@@ -6,12 +6,7 @@
 <title>Sniper Terminal</title>
 
 <style>
-body {
-  background:#0f0f0f;
-  color:white;
-  font-family:sans-serif;
-  padding:10px;
-}
+body { background:#0f0f0f; color:white; font-family:sans-serif; padding:10px; }
 h1 { text-align:center; color:#19f5b3; }
 
 .card {
@@ -34,10 +29,8 @@ button {
   padding:8px 12px;
   border-radius:8px;
   margin-top:8px;
-  cursor:pointer;
 }
 
-.red { color:#ff4d4d }
 .green { color:#00ffae }
 .yellow { color:#ffd700 }
 </style>
@@ -66,7 +59,7 @@ button {
 
 <script>
 
-// ✅ SERVICE WORKER SAFE REGISTER
+// ✅ SERVICE WORKER
 if ("serviceWorker" in navigator) {
   window.addEventListener("load", () => {
     navigator.serviceWorker.register("./sw.js").catch(()=>{});
@@ -74,15 +67,14 @@ if ("serviceWorker" in navigator) {
 }
 
 // ==========================
-// 🔥 FETCH DATA (FIXED)
+// 🔥 FETCH (WORKING)
 // ==========================
 async function fetchData(){
   try {
-    let res = await fetch("https://api.dexscreener.com/latest/dex/pairs/ethereum");
+    let res = await fetch("https://api.dexscreener.com/latest/dex/search/?q=usdt");
     let data = await res.json();
     return data.pairs || [];
-  } catch (e){
-    console.log("API error", e);
+  } catch {
     return [];
   }
 }
@@ -90,77 +82,67 @@ async function fetchData(){
 // ==========================
 // 🔔 ALERT
 // ==========================
-function triggerAlert(){
-  let audio = document.getElementById("alertSound");
-  audio.play().catch(()=>{});
-  if (navigator.vibrate) navigator.vibrate(200);
+function alertUser(){
+  document.getElementById("alertSound").play().catch(()=>{});
+  if(navigator.vibrate) navigator.vibrate(200);
 }
 
 // ==========================
-// 🛑 SAFE FILTER
+// 🛑 FILTER
 // ==========================
-function isSafe(p){
-  return (
-    p.liquidity?.usd > 20000 &&
-    p.volume?.h24 > 30000 &&
-    p.txns?.h24?.buys > p.txns?.h24?.sells
-  );
+function safe(p){
+  return p.liquidity?.usd > 20000 && p.volume?.h24 > 30000;
 }
 
 // ==========================
 // 🔗 LINK
 // ==========================
-function dexLink(p){
+function link(p){
   return `https://dexscreener.com/${p.chainId}/${p.pairAddress}`;
 }
 
 // ==========================
 // 🔥 TRENDING
 // ==========================
-async function fetchTrending(){
-  let box = document.getElementById("trending");
+async function trending(){
+  let el = document.getElementById("trending");
   let pairs = await fetchData();
 
-  if(!pairs.length){
-    box.innerHTML = "⚠️ No data";
-    return;
-  }
-
   let list = pairs.filter(p =>
-    p.volume?.h24 > 150000 &&
-    p.priceChange?.h24 > 3 &&
-    isSafe(p)
+    p.priceChange?.h24 > 2 &&
+    p.volume?.h24 > 100000 &&
+    safe(p)
   ).slice(0,5);
 
-  box.innerHTML = list.map(p=>`
+  el.innerHTML = list.map(p=>`
     <div class="item">
       <b>${p.baseToken.symbol}</b><br>
       Vol: $${Math.round(p.volume.h24)}<br>
       Change: ${p.priceChange.h24.toFixed(2)}%<br>
-      <button onclick="window.open('${dexLink(p)}')">💰 Buy</button>
+      <button onclick="window.open('${link(p)}')">💰 Buy</button>
     </div>
-  `).join("") || "No trending";
+  `).join("") || "No data";
 }
 
 // ==========================
 // 🐋 WHALES
 // ==========================
-async function fetchWhales(){
-  let box = document.getElementById("whales");
+async function whales(){
+  let el = document.getElementById("whales");
   let pairs = await fetchData();
 
   let list = pairs.filter(p =>
     p.volume?.h24 > 400000 &&
-    Math.abs(p.priceChange?.h24 || 0) < 8 &&
-    isSafe(p)
+    Math.abs(p.priceChange?.h24 || 0) < 5 &&
+    safe(p)
   ).slice(0,5);
 
-  box.innerHTML = list.map(p=>`
+  el.innerHTML = list.map(p=>`
     <div class="item">
       <b>${p.baseToken.symbol}</b><br>
       Vol: $${Math.round(p.volume.h24)}<br>
       <span class="yellow">🐋 Accumulating</span><br>
-      <button onclick="window.open('${dexLink(p)}')">View</button>
+      <button onclick="window.open('${link(p)}')">View</button>
     </div>
   `).join("") || "No whales";
 }
@@ -170,60 +152,45 @@ async function fetchWhales(){
 // ==========================
 let seen = new Set();
 
-async function fetchSpikes(){
-  let box = document.getElementById("spikes");
+async function spikes(){
+  let el = document.getElementById("spikes");
   let pairs = await fetchData();
 
   let list = pairs.filter(p =>
     p.volume?.h24 > 120000 &&
     Math.abs(p.priceChange?.h24 || 0) < 6 &&
-    p.txns?.h24?.buys > p.txns?.h24?.sells &&
-    isSafe(p)
+    safe(p)
   ).slice(0,6);
 
   list.forEach(p=>{
     if(!seen.has(p.pairAddress)){
-      triggerAlert();
+      alertUser();
       seen.add(p.pairAddress);
     }
   });
 
-  box.innerHTML = list.map(p=>{
-    let pressure = p.txns.h24.buys - p.txns.h24.sells;
-
-    let tag =
-      pressure > 200 ? "🚨 HEAVY" :
-      pressure > 100 ? "🔥 BUILDING" :
-      "👀 EARLY";
-
-    return `
+  el.innerHTML = list.map(p=>`
     <div class="item">
       <b>${p.baseToken.symbol}</b><br>
       Vol: $${Math.round(p.volume.h24)}<br>
       Change: ${p.priceChange.h24.toFixed(2)}%<br>
-      <span class="green">${tag}</span><br>
-      <button onclick="window.open('${dexLink(p)}')">💰 Buy</button>
+      <span class="green">🚨 EARLY</span><br>
+      <button onclick="window.open('${link(p)}')">💰 Buy</button>
     </div>
-    `;
-  }).join("") || "No spikes";
+  `).join("") || "No spikes";
 }
 
 // ==========================
 // 🚀 INIT
 // ==========================
-async function init(){
-  await fetchTrending();
-  await fetchWhales();
-  await fetchSpikes();
+function run(){
+  trending();
+  whales();
+  spikes();
 }
 
-init();
-
-setInterval(()=>{
-  fetchTrending();
-  fetchWhales();
-  fetchSpikes();
-},20000);
+run();
+setInterval(run, 20000);
 
 </script>
 
