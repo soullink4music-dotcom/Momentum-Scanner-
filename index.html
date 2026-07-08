@@ -45,6 +45,7 @@ button {
 }
 .green { color: #00ff9f; }
 .red { color: #ff4d4d; }
+.yellow { color: #ffd700; }
 </style>
 </head>
 
@@ -52,7 +53,7 @@ button {
 
 <h1>🚀 Momentum Scanner Pro</h1>
 
-<!-- LOG SIGNAL -->
+<!-- SIGNAL -->
 <div class="card">
 <h3>📝 Log Signal</h3>
 <input id="ticker" placeholder="Ticker">
@@ -61,7 +62,6 @@ button {
 <button onclick="logSignal()">Log</button>
 </div>
 
-<!-- SIGNALS -->
 <div class="card">
 <h3>📋 Signals</h3>
 <div id="signals"></div>
@@ -79,171 +79,166 @@ button {
 
 <!-- TRENDING -->
 <div class="card">
-<h3>🔥 Auto Trending Tokens</h3>
+<h3>🔥 Trending</h3>
 <div id="trending"></div>
+</div>
+
+<!-- 🐋 WHALE + EARLY -->
+<div class="card">
+<h3>🐋 Whale Activity + Early Pumps</h3>
+<div id="whales"></div>
 </div>
 
 <script>
 let signals = JSON.parse(localStorage.getItem("signals") || "[]");
 let watchlist = JSON.parse(localStorage.getItem("watchlist") || "[]");
 
-// FETCH TOKEN DATA
-async function fetchTokenData(query) {
-  try {
-    const res = await fetch(`https://api.dexscreener.com/latest/dex/search?q=${query}`);
-    const data = await res.json();
-    return data.pairs ? data.pairs[0] : null;
-  } catch {
-    return null;
-  }
+// FETCH DATA
+async function fetchData(q="sol") {
+  const res = await fetch(`https://api.dexscreener.com/latest/dex/search?q=${q}`);
+  const data = await res.json();
+  return data.pairs || [];
 }
 
-// RENDER SIGNALS
+// SIGNALS
 async function renderSignals() {
   const box = document.getElementById("signals");
-  box.innerHTML = "Loading...";
-
   let html = "";
 
   for (let s of signals) {
-    let pair = await fetchTokenData(s.ticker || s.ca);
+    let pairs = await fetchData(s.ticker);
+    let p = pairs[0];
 
-    let price = pair ? pair.priceUsd : "N/A";
-    let change = pair ? pair.priceChange.h24 : "0";
+    if (!p) continue;
 
-    let color = change >= 0 ? "green" : "red";
+    let change = p.priceChange.h24;
     let signal = change > 20 ? "🚀 STRONG BUY" :
                  change > 5 ? "📈 MOMENTUM" :
                  "⚠️ WEAK";
 
     html += `
-      <div class="item">
-        <b>${s.ticker}</b><br>
-        Price: $${price}<br>
-        <span class="${color}">24h: ${change}%</span><br>
-        Signal: ${signal}<br>
-        ${s.note}
-      </div>
-    `;
+    <div class="item">
+      <b>${s.ticker}</b><br>
+      Price: $${p.priceUsd}<br>
+      <span class="${change>0?'green':'red'}">${change}%</span><br>
+      ${signal}
+    </div>`;
   }
 
-  box.innerHTML = html || "No signals yet";
+  box.innerHTML = html || "No signals";
 }
 
-// RENDER WATCHLIST
+// WATCHLIST
 async function renderWatch() {
   const box = document.getElementById("watchlist");
-  box.innerHTML = "Loading...";
-
   let html = "";
 
   for (let w of watchlist) {
-    let pair = await fetchTokenData(w.ticker || w.ca);
-
-    let price = pair ? pair.priceUsd : "N/A";
-    let change = pair ? pair.priceChange.h24 : "0";
-
-    let color = change >= 0 ? "green" : "red";
+    let pairs = await fetchData(w.ticker);
+    let p = pairs[0];
+    if (!p) continue;
 
     html += `
-      <div class="item">
-        <b>${w.ticker}</b> (Hype: ${w.hype})<br>
-        Price: $${price}<br>
-        <span class="${color}">${change}%</span>
-      </div>
-    `;
+    <div class="item">
+      <b>${w.ticker}</b> (Hype ${w.hype})<br>
+      $${p.priceUsd}<br>
+      <span class="${p.priceChange.h24>0?'green':'red'}">
+      ${p.priceChange.h24}%
+      </span>
+    </div>`;
   }
 
-  box.innerHTML = html || "Empty watchlist";
+  box.innerHTML = html || "Empty";
 }
 
-// 🔥 TRENDING TOKENS
+// 🔥 TRENDING
 async function fetchTrending() {
   const box = document.getElementById("trending");
-  box.innerHTML = "Scanning market...";
+  let pairs = await fetchData();
 
-  try {
-    const res = await fetch("https://api.dexscreener.com/latest/dex/search?q=sol");
-    const data = await res.json();
+  let list = pairs
+    .filter(p => p.priceChange.h24 > 10)
+    .sort((a,b)=>b.priceChange.h24-a.priceChange.h24)
+    .slice(0,10);
 
-    let pairs = data.pairs || [];
+  let html = list.map(p=>`
+    <div class="item">
+      <b>${p.baseToken.symbol}</b><br>
+      $${p.priceUsd}<br>
+      <span class="green">${p.priceChange.h24}%</span>
+    </div>`).join("");
 
-    let trending = pairs
-      .filter(p => p.priceChange.h24 > 10)
-      .sort((a, b) => b.priceChange.h24 - a.priceChange.h24)
-      .slice(0, 10);
+  box.innerHTML = html || "No trends";
+}
 
-    let html = "";
+// 🐋 WHALE + EARLY DETECTION
+async function fetchWhales() {
+  const box = document.getElementById("whales");
+  box.innerHTML = "Scanning smart money...";
 
-    trending.forEach(p => {
-      let change = p.priceChange.h24;
+  let pairs = await fetchData();
 
-      let signal = change > 30 ? "🚀 PARABOLIC" :
-                   change > 15 ? "🔥 HOT" :
-                   "📈 TRENDING";
+  let whales = pairs.filter(p =>
+    p.liquidity.usd > 50000 && // real money
+    p.volume.h24 > 100000 &&  // strong activity
+    p.priceChange.h24 < 15    // NOT pumped yet
+  ).slice(0,10);
 
-      html += `
-        <div class="item">
-          <b>${p.baseToken.symbol}</b><br>
-          Price: $${p.priceUsd}<br>
-          <span class="green">${change}%</span><br>
-          ${signal}
-        </div>
-      `;
-    });
+  let html = "";
 
-    box.innerHTML = html || "No strong trends found";
+  whales.forEach(p => {
+    let tag = "🐋 ACCUMULATION";
+    if (p.volume.h24 > 500000) tag = "🚨 EARLY GEM";
 
-  } catch {
-    box.innerHTML = "Error loading data";
-  }
+    html += `
+    <div class="item">
+      <b>${p.baseToken.symbol}</b><br>
+      Price: $${p.priceUsd}<br>
+      Vol: $${Math.round(p.volume.h24)}<br>
+      Liquidity: $${Math.round(p.liquidity.usd)}<br>
+      <span class="yellow">${tag}</span>
+    </div>`;
+  });
+
+  box.innerHTML = html || "No whale activity";
 }
 
 // ACTIONS
 function logSignal() {
-  const ticker = document.getElementById("ticker").value;
-  const ca = document.getElementById("ca").value;
-  const note = document.getElementById("note").value;
-
-  if (!ticker) return alert("Enter ticker");
-
-  signals.push({ ticker, ca, note });
+  let t = ticker.value;
+  if (!t) return alert("Enter ticker");
+  signals.push({ticker:t});
   localStorage.setItem("signals", JSON.stringify(signals));
-
   renderSignals();
 }
 
 function addWatch() {
-  const ticker = document.getElementById("wticker").value;
-  const ca = document.getElementById("wca").value;
-  const hype = document.getElementById("hype").value;
-
-  if (!ticker) return alert("Enter ticker");
-
-  watchlist.push({ ticker, ca, hype });
+  let t = wticker.value;
+  let h = hype.value;
+  if (!t) return alert("Enter ticker");
+  watchlist.push({ticker:t, hype:h});
   localStorage.setItem("watchlist", JSON.stringify(watchlist));
-
   renderWatch();
 }
 
 // AUTO REFRESH
-setInterval(() => {
+setInterval(()=>{
   renderSignals();
   renderWatch();
   fetchTrending();
-}, 20000);
+  fetchWhales();
+},20000);
 
-// INITIAL LOAD
+// INIT
 renderSignals();
 renderWatch();
 fetchTrending();
+fetchWhales();
 
 // SERVICE WORKER
 if ("serviceWorker" in navigator) {
   window.addEventListener("load", () => {
-    navigator.serviceWorker.register("./sw.js")
-      .then(() => console.log("✅ Service Worker Registered"))
-      .catch(err => console.error("❌ SW failed:", err));
+    navigator.serviceWorker.register("./sw.js");
   });
 }
 </script>
