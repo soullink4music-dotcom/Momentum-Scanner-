@@ -1,200 +1,145 @@
-<!DOCTYPE html><html lang="en">
+
+<!DOCTYPE html>
+<html lang="en">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>🚀 Momentum Scanner Pro</title><script src="https://cdn.jsdelivr.net/npm/chart.js"></script><style>
-body{margin:0;font-family:system-ui;background:#0a0a0a;color:#eee}
-.container{max-width:1000px;margin:auto;padding:16px}
-h1{text-align:center;color:#00ff9f}
+<title>Momentum Scanner Pro</title>
 
-.section{background:#151515;padding:16px;border-radius:12px;margin:16px 0}
-
-input,textarea,button{
-width:100%;padding:10px;margin-top:8px;
-border-radius:8px;border:1px solid #333;
-background:#1f1f1f;color:#fff
+<style>
+body {
+  font-family: sans-serif;
+  background: #0a0a0a;
+  color: white;
+  padding: 15px;
 }
-
-button{background:#00ff9f;color:#000;font-weight:bold;cursor:pointer}
-
-.table{width:100%;border-collapse:collapse}
-.table th,.table td{padding:10px;border-bottom:1px solid #333}
-
-.green{color:#00ff9f}
-.red{color:#ff5a5a}
-
-.modal{
-position:fixed;top:0;left:0;width:100%;height:100%;
-background:rgba(0,0,0,0.9);display:none;
-justify-content:center;align-items:center;
+h1 {
+  color: #00ff9f;
 }
-
-.modal-content{
-background:#111;padding:20px;border-radius:12px;width:95%;
+.card {
+  background: #1a1a1a;
+  padding: 15px;
+  margin-top: 15px;
+  border-radius: 10px;
 }
+input, textarea {
+  width: 100%;
+  padding: 10px;
+  margin-top: 10px;
+  background: #222;
+  border: none;
+  color: white;
+  border-radius: 5px;
+}
+button {
+  width: 100%;
+  padding: 12px;
+  margin-top: 10px;
+  background: #00ff9f;
+  border: none;
+  border-radius: 5px;
+  font-weight: bold;
+}
+.item {
+  background: #222;
+  padding: 10px;
+  margin-top: 10px;
+  border-radius: 5px;
+}
+</style>
+</head>
 
-canvas{height:400px!important}
-</style></head><body>
-<div class="container"><h1>🚀 Momentum Scanner Pro</h1><div class="section">
+<body>
+
+<h1>🚀 Momentum Scanner Pro</h1>
+
+<div class="card">
 <h3>📝 Log Signal</h3>
-<input id="logTicker" placeholder="Ticker">
-<input id="logCA" placeholder="Contract Address">
-<textarea id="logNotes"></textarea>
+<input id="ticker" placeholder="Ticker">
+<input id="ca" placeholder="Contract Address">
+<textarea id="note" placeholder="Notes"></textarea>
 <button onclick="logSignal()">Log</button>
-</div><div class="section">
+</div>
+
+<div class="card">
 <h3>📋 Signals</h3>
 <div id="signals"></div>
-</div><div class="section">
-<h3>⭐ Watchlist</h3><input id="wlTicker" placeholder="Ticker">
-<input id="wlCA" placeholder="CA">
-<input id="wlHype" type="number" placeholder="Hype 1-10"><button onclick="addWatch()">Add</button>
-
-<div id="watchlist"></div>
-</div></div><div id="chartModal" class="modal">
-<div class="modal-content">
-<button onclick="closeModal()">Close</button>
-<canvas id="chart"></canvas>
 </div>
-</div><script>
 
-// ===== STATE =====
-let signals = JSON.parse(localStorage.getItem('signals'))||[]
-let watchlist = JSON.parse(localStorage.getItem('watch'))||[]
-let chartInstance=null
+<div class="card">
+<h3>⭐ Watchlist</h3>
+<input id="wticker" placeholder="Ticker">
+<input id="wca" placeholder="CA">
+<input id="hype" placeholder="Hype 1-10">
+<button onclick="addWatch()">Add</button>
+<div id="watchlist"></div>
+</div>
 
-function save(){
-localStorage.setItem('signals',JSON.stringify(signals))
-localStorage.setItem('watch',JSON.stringify(watchlist))
+<script>
+// LOAD DATA
+let signals = JSON.parse(localStorage.getItem("signals") || "[]");
+let watchlist = JSON.parse(localStorage.getItem("watchlist") || "[]");
+
+// DISPLAY FUNCTIONS
+function renderSignals() {
+  const box = document.getElementById("signals");
+  box.innerHTML = "";
+  signals.forEach(s => {
+    box.innerHTML += `
+      <div class="item">
+        <b>${s.ticker}</b><br>
+        ${s.ca}<br>
+        ${s.note}
+      </div>
+    `;
+  });
 }
 
-// ===== SIGNAL =====
-function logSignal(){
-let t=logTicker.value.toUpperCase()
-if(!t)return alert("Ticker required")
-
-signals.push({
-ticker:t,
-ca:logCA.value,
-notes:logNotes.value
-})
-
-save()
-renderSignals()
+function renderWatch() {
+  const box = document.getElementById("watchlist");
+  box.innerHTML = "";
+  watchlist.forEach(w => {
+    box.innerHTML += `
+      <div class="item">
+        <b>${w.ticker}</b> (Hype: ${w.hype})<br>
+        ${w.ca}
+      </div>
+    `;
+  });
 }
 
-function renderSignals(){
-let el=document.getElementById('signals')
-el.innerHTML=''
+// ACTIONS
+function logSignal() {
+  const ticker = document.getElementById("ticker").value;
+  const ca = document.getElementById("ca").value;
+  const note = document.getElementById("note").value;
 
-signals.forEach(s=>{
-el.innerHTML+=`
-<div style="background:#1c1c1c;padding:10px;margin:6px 0;border-radius:8px">
-<b>${s.ticker}</b><br>${s.notes}
-<button onclick="prefill('${s.ticker}','${s.ca}')">→</button>
-</div>`
-})
+  if (!ticker) return alert("Enter ticker");
+
+  signals.push({ ticker, ca, note });
+  localStorage.setItem("signals", JSON.stringify(signals));
+
+  renderSignals();
 }
 
-function prefill(t,ca){
-wlTicker.value=t
-wlCA.value=ca
+function addWatch() {
+  const ticker = document.getElementById("wticker").value;
+  const ca = document.getElementById("wca").value;
+  const hype = document.getElementById("hype").value;
+
+  if (!ticker) return alert("Enter ticker");
+
+  watchlist.push({ ticker, ca, hype });
+  localStorage.setItem("watchlist", JSON.stringify(watchlist));
+
+  renderWatch();
 }
 
-// ===== WATCHLIST =====
-function addWatch(){
-let t=wlTicker.value.toUpperCase()
-if(!t)return alert("Ticker required")
+// INITIAL LOAD
+renderSignals();
+renderWatch();
 
-watchlist.push({
-ticker:t,
-ca:wlCA.value,
-hype:parseInt(wlHype.value)||5
-})
-
-save()
-renderWatch()
-}
-
-// ===== API =====
-async function fetchPrice(ca){
-try{
-let r=await fetch(`https://public-api.birdeye.so/defi/price?address=${ca}`,{
-headers:{'x-chain':'solana'}
-})
-let d=await r.json()
-return d.data||null
-}catch{return null}
-}
-
-// ===== MOMENTUM =====
-function calcMomentum(x){
-let hype=x.hype||5
-let liq=x.liquidity||1000
-return hype*Math.log10(liq+1)
-}
-
-// ===== RENDER =====
-async function renderWatch(){
-let html=`<table class="table">
-<tr><th>T</th><th>$</th><th>%</th><th>Liq</th><th>Score</th></tr>`
-
-for(let w of watchlist){
-if(w.ca){
-let d=await fetchPrice(w.ca)
-if(d){
-w.price=d.value
-w.change=d.priceChange24h
-w.liquidity=d.liquidity
-}
-}
-w.score=calcMomentum(w)
-
-html+=`
-<tr>
-<td>${w.ticker}</td>
-<td class="green">${w.price?Number(w.price).toFixed(6):'-'}</td>
-<td class="${w.change>0?'green':'red'}">${w.change? w.change.toFixed(2)+'%':'-'}</td>
-<td>${w.liquidity?Number(w.liquidity).toLocaleString():'-'}</td>
-<td>${w.score.toFixed(2)}</td>
-</tr>`
-}
-
-html+='</table>'
-watchlist.innerHTML=html
-save()
-}
-
-// ===== CHART =====
-async function showChart(ca){
-chartModal.style.display='flex'
-
-let ctx=document.getElementById('chart').getContext('2d')
-if(chartInstance)chartInstance.destroy()
-
-let r=await fetch(`https://public-api.birdeye.so/defi/history_price?address=${ca}&type=1H`,{
-headers:{'x-chain':'solana'}
-})
-
-let d=await r.json()
-
-let labels=d.data.items.map(i=>new Date(i.unixTime*1000).toLocaleTimeString())
-let prices=d.data.items.map(i=>i.value)
-
-chartInstance=new Chart(ctx,{
-type:'line',
-data:{labels,datasets:[{data:prices,borderColor:'#00ff9f'}]}
-})
-}
-
-function closeModal(){
-chartModal.style.display='none'
-}
-
-// ===== INIT =====
-renderSignals()
-renderWatch()
-
-// ===== SERVICE WORKER (FIXED) =====
+// SERVICE WORKER (YOUR FIX)
 if ("serviceWorker" in navigator) {
   window.addEventListener("load", () => {
     navigator.serviceWorker.register("./sw.js")
@@ -202,6 +147,7 @@ if ("serviceWorker" in navigator) {
       .catch(err => console.error("❌ SW failed:", err));
   });
 }
+</script>
 
-</script></body>
+</body>
 </html>
