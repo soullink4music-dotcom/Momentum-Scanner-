@@ -13,12 +13,14 @@ body {
   padding: 15px;
 }
 h1 { color: #00ff9f; }
+
 .card {
   background: #1a1a1a;
   padding: 15px;
   margin-top: 15px;
   border-radius: 10px;
 }
+
 input, textarea {
   width: 100%;
   padding: 10px;
@@ -28,6 +30,7 @@ input, textarea {
   color: white;
   border-radius: 5px;
 }
+
 button {
   width: 100%;
   padding: 12px;
@@ -37,12 +40,14 @@ button {
   border-radius: 5px;
   font-weight: bold;
 }
+
 .item {
   background: #222;
   padding: 10px;
   margin-top: 10px;
   border-radius: 5px;
 }
+
 .green { color: #00ff9f; }
 .red { color: #ff4d4d; }
 .yellow { color: #ffd700; }
@@ -57,7 +62,6 @@ button {
 <div class="card">
 <h3>📝 Log Signal</h3>
 <input id="ticker" placeholder="Ticker">
-<input id="ca" placeholder="Contract Address">
 <textarea id="note" placeholder="Notes"></textarea>
 <button onclick="logSignal()">Log</button>
 </div>
@@ -72,7 +76,6 @@ button {
 <div class="card">
 <h3>⭐ Watchlist</h3>
 <input id="wticker" placeholder="Ticker">
-<input id="wca" placeholder="CA">
 <input id="hype" placeholder="Hype 1-10">
 <button onclick="addWatch()">Add</button>
 <div id="watchlist"></div>
@@ -90,12 +93,18 @@ button {
 <div id="whales"></div>
 </div>
 
+<!-- VOLUME SPIKES -->
+<div class="card">
+<h3>🚨 Volume Spike (Early Entry)</h3>
+<div id="spikes"></div>
+</div>
+
 <script>
 // STORAGE
 let signals = JSON.parse(localStorage.getItem("signals") || "[]");
 let watchlist = JSON.parse(localStorage.getItem("watchlist") || "[]");
 
-// 🔥 MULTI-CHAIN DATA FETCH
+// FETCH DATA (MULTI QUERY)
 async function fetchData() {
   try {
     const queries = ["eth", "bnb", "sol", "usdt", "pepe", "doge"];
@@ -108,24 +117,23 @@ async function fetchData() {
     }
 
     return allPairs;
-
   } catch {
     return [];
   }
 }
 
-// 🧠 SCORE SYSTEM (IMPORTANT)
+// SCORE SYSTEM
 function scoreToken(p) {
   let score = 0;
 
-  score += Math.min(p.volume.h24 / 100000, 10);     // volume weight
-  score += Math.min(p.liquidity.usd / 200000, 10);  // liquidity weight
-  score += (p.txns.h24.buys - p.txns.h24.sells) / 50; // buy pressure
+  score += Math.min((p.volume?.h24 || 0) / 100000, 10);
+  score += Math.min((p.liquidity?.usd || 0) / 200000, 10);
+  score += ((p.txns?.h24?.buys || 0) - (p.txns?.h24?.sells || 0)) / 50;
 
   return score;
 }
 
-// 📋 SIGNALS
+// SIGNALS
 async function renderSignals() {
   const box = document.getElementById("signals");
   let html = "";
@@ -136,16 +144,18 @@ async function renderSignals() {
     let p = data.pairs?.[0];
     if (!p) continue;
 
-    let change = p.priceChange.h24;
-    let signal = change > 20 ? "🚀 STRONG BUY" :
-                 change > 5 ? "📈 MOMENTUM" :
-                 "⚠️ WEAK";
+    let change = p.priceChange?.h24 || 0;
+
+    let signal =
+      change > 20 ? "🚀 STRONG BUY" :
+      change > 5 ? "📈 MOMENTUM" :
+      "⚠️ WEAK";
 
     html += `
     <div class="item">
       <b>${s.ticker}</b><br>
       $${p.priceUsd}<br>
-      <span class="${change>0?'green':'red'}">${change}%</span><br>
+      <span class="${change>0?'green':'red'}">${change.toFixed(2)}%</span><br>
       ${signal}
     </div>`;
   }
@@ -153,7 +163,7 @@ async function renderSignals() {
   box.innerHTML = html || "No signals";
 }
 
-// ⭐ WATCHLIST
+// WATCHLIST
 async function renderWatch() {
   const box = document.getElementById("watchlist");
   let html = "";
@@ -164,12 +174,14 @@ async function renderWatch() {
     let p = data.pairs?.[0];
     if (!p) continue;
 
+    let change = p.priceChange?.h24 || 0;
+
     html += `
     <div class="item">
       <b>${w.ticker}</b> (Hype ${w.hype})<br>
       $${p.priceUsd}<br>
-      <span class="${p.priceChange.h24>0?'green':'red'}">
-      ${p.priceChange.h24}%
+      <span class="${change>0?'green':'red'}">
+      ${change.toFixed(2)}%
       </span>
     </div>`;
   }
@@ -177,13 +189,21 @@ async function renderWatch() {
   box.innerHTML = html || "Empty";
 }
 
-// 🔥 TRENDING
+// TRENDING (NO DUPES)
 async function fetchTrending() {
   const box = document.getElementById("trending");
   let pairs = await fetchData();
 
+  let seen = new Set();
+
   let list = pairs
-    .filter(p => p.priceChange.h24 > 10)
+    .filter(p => (p.priceChange?.h24 || 0) > 10)
+    .filter(p => {
+      let sym = p.baseToken.symbol;
+      if (seen.has(sym)) return false;
+      seen.add(sym);
+      return true;
+    })
     .sort((a,b)=>b.priceChange.h24-a.priceChange.h24)
     .slice(0,10);
 
@@ -191,51 +211,123 @@ async function fetchTrending() {
     <div class="item">
       <b>${p.baseToken.symbol}</b><br>
       $${p.priceUsd}<br>
-      <span class="green">${p.priceChange.h24}%</span>
+      <span class="green">${p.priceChange.h24.toFixed(2)}%</span>
     </div>`).join("");
 
   box.innerHTML = html || "No trends";
 }
 
-// 🐋 WHALE + EARLY (RANKED)
+// WHALES (FIXED)
 async function fetchWhales() {
   const box = document.getElementById("whales");
   box.innerHTML = "Scanning smart money...";
 
   let pairs = await fetchData();
 
-  let whales = pairs.filter(p =>
-    p.liquidity.usd > 100000 &&
-    p.volume.h24 > 200000 &&
-    Math.abs(p.priceChange.h24) < 20 &&
-    p.txns.h24.buys > p.txns.h24.sells
+  let clean = pairs.filter(p =>
+    p.liquidity?.usd &&
+    p.volume?.h24 &&
+    p.txns?.h24
   );
 
-  // 🧠 SORT BY SCORE
+  let whales = clean.filter(p =>
+    p.liquidity.usd > 50000 &&
+    p.volume.h24 > 100000 &&
+    Math.abs(p.priceChange?.h24 || 0) < 25 &&
+    (p.txns.h24.buys || 0) > (p.txns.h24.sells || 0)
+  );
+
+  let seen = new Set();
+  whales = whales.filter(p => {
+    let sym = p.baseToken.symbol;
+    if (seen.has(sym)) return false;
+    seen.add(sym);
+    return true;
+  });
+
   whales.sort((a,b)=>scoreToken(b)-scoreToken(a));
+  whales = whales.slice(0,10);
 
-  whales = whales.slice(0, 12);
-
-  let html = "";
-
-  whales.forEach(p => {
+  let html = whales.map(p=>{
     let score = scoreToken(p).toFixed(1);
-    let tag = score > 15 ? "🚨 TOP GEM" :
-              score > 10 ? "🔥 STRONG" :
-              "🐋 ACCUMULATION";
 
-    html += `
+    let tag =
+      score > 15 ? "🚨 TOP GEM" :
+      score > 10 ? "🔥 STRONG" :
+      "🐋 ACCUMULATION";
+
+    return `
     <div class="item">
       <b>${p.baseToken.symbol}</b><br>
-      Price: $${p.priceUsd}<br>
+      $${p.priceUsd}<br>
       Vol: $${Math.round(p.volume.h24)}<br>
-      Liquidity: $${Math.round(p.liquidity.usd)}<br>
+      Liq: $${Math.round(p.liquidity.usd)}<br>
       Score: ${score}<br>
       <span class="yellow">${tag}</span>
     </div>`;
-  });
+  }).join("");
 
   box.innerHTML = html || "No whale activity";
+}
+
+// 🚨 VOLUME SPIKES (EARLY ENTRY)
+async function fetchSpikes() {
+  const box = document.getElementById("spikes");
+  box.innerHTML = "Scanning early entries...";
+
+  let pairs = await fetchData();
+
+  let clean = pairs.filter(p =>
+    p.volume?.h24 &&
+    p.liquidity?.usd &&
+    p.txns?.h24
+  );
+
+  let spikes = clean.filter(p =>
+    p.volume.h24 > 150000 &&
+    p.liquidity.usd > 50000 &&
+    Math.abs(p.priceChange?.h24 || 0) < 8 &&
+    (p.txns.h24.buys || 0) > (p.txns.h24.sells || 0)
+  );
+
+  let seen = new Set();
+  spikes = spikes.filter(p => {
+    let sym = p.baseToken.symbol;
+    if (seen.has(sym)) return false;
+    seen.add(sym);
+    return true;
+  });
+
+  spikes.sort((a,b)=>
+    (b.txns.h24.buys - b.txns.h24.sells) -
+    (a.txns.h24.buys - a.txns.h24.sells)
+  );
+
+  spikes = spikes.slice(0,8);
+
+  let html = spikes.map(p => {
+    let buys = p.txns.h24.buys || 0;
+    let sells = p.txns.h24.sells || 0;
+    let pressure = buys - sells;
+
+    let tag =
+      pressure > 200 ? "🚨 HEAVY ACCUMULATION" :
+      pressure > 100 ? "🔥 BUILDING" :
+      "👀 EARLY";
+
+    return `
+    <div class="item">
+      <b>${p.baseToken.symbol}</b><br>
+      $${p.priceUsd}<br>
+      Vol: $${Math.round(p.volume.h24)}<br>
+      Price Change: ${p.priceChange.h24.toFixed(2)}%<br>
+      Buy Pressure: ${pressure}<br>
+      <span class="yellow">${tag}</span>
+    </div>
+    `;
+  }).join("");
+
+  box.innerHTML = html || "No early spikes";
 }
 
 // ACTIONS
@@ -262,6 +354,7 @@ setInterval(()=>{
   renderWatch();
   fetchTrending();
   fetchWhales();
+  fetchSpikes();
 },20000);
 
 // INIT
@@ -269,6 +362,7 @@ renderSignals();
 renderWatch();
 fetchTrending();
 fetchWhales();
+fetchSpikes();
 
 // SERVICE WORKER
 if ("serviceWorker" in navigator) {
