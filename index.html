@@ -1,54 +1,49 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
 <meta charset="UTF-8">
-<title>🚀 Sniper Terminal</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sniper Terminal</title>
 
 <style>
 body {
-  background:#0b0b0b;
+  background:#0f0f0f;
   color:white;
-  font-family:Arial;
-  padding:15px;
+  font-family:sans-serif;
+  padding:10px;
 }
 
 h1 {
-  color:#00ffa6;
   text-align:center;
-}
-
-.section {
-  background:#1a1a1a;
-  padding:15px;
-  border-radius:12px;
-  margin-top:15px;
+  color:#19f5b3;
 }
 
 .card {
-  background:#222;
+  background:#1c1c1c;
+  padding:15px;
+  border-radius:15px;
+  margin-bottom:15px;
+}
+
+.item {
+  background:#2a2a2a;
   padding:12px;
-  margin-top:10px;
   border-radius:10px;
+  margin-top:10px;
 }
 
 button {
-  background:#00ffa6;
+  background:#19f5b3;
   border:none;
   padding:8px 12px;
   border-radius:8px;
-  margin-top:5px;
+  margin-top:8px;
   cursor:pointer;
 }
 
-.alert {
-  color:yellow;
-  font-weight:bold;
-}
-
-.good { color:#00ffa6; }
-.bad { color:red; }
-
+.red { color:#ff4d4d }
+.green { color:#00ffae }
+.yellow { color:#ffd700 }
 </style>
 </head>
 
@@ -56,24 +51,26 @@ button {
 
 <h1>🚀 Sniper Terminal</h1>
 
-<div class="section">
-<h2>🔥 Trending</h2>
+<div class="card">
+<h3>🔥 Trending</h3>
 <div id="trending"></div>
 </div>
 
-<div class="section">
-<h2>🐋 Whale Gems</h2>
+<div class="card">
+<h3>🐋 Whale Gems</h3>
 <div id="whales"></div>
 </div>
 
-<div class="section">
-<h2>🚨 Volume Spikes</h2>
+<div class="card">
+<h3>🚨 Early Volume Spikes</h3>
 <div id="spikes"></div>
 </div>
 
+<audio id="alertSound" src="https://actions.google.com/sounds/v1/alarms/beep_short.ogg"></audio>
+
 <script>
 
-// ✅ SERVICE WORKER
+// ✅ SERVICE WORKER FIX
 if ("serviceWorker" in navigator) {
   window.addEventListener("load", () => {
     navigator.serviceWorker.register("./sw.js")
@@ -82,114 +79,149 @@ if ("serviceWorker" in navigator) {
   });
 }
 
-// 🔊 ALERT SOUND
-function playAlert(){
-  let audio = new Audio("https://actions.google.com/sounds/v1/alarms/beep_short.ogg");
-  audio.play();
-}
-
-// 📊 FETCH DATA (MULTI SCAN)
+// ==========================
+// 🔥 FETCH DATA
+// ==========================
 async function fetchData(){
-  let queries = ["eth","bnb","sol","usdt","pepe","doge"];
-  let all = [];
-
-  for (let q of queries){
-    let res = await fetch(`https://api.dexscreener.com/latest/dex/search?q=${q}`);
-    let data = await res.json();
-    if(data.pairs) all = all.concat(data.pairs);
-  }
-
-  return all;
+  let res = await fetch("https://api.dexscreener.com/latest/dex/tokens/eth");
+  let data = await res.json();
+  return data.pairs || [];
 }
 
-// 🛡️ ANTI RUG FILTER
+// ==========================
+// 🔔 ALERT SYSTEM
+// ==========================
+function triggerAlert(){
+  document.getElementById("alertSound").play();
+  if (navigator.vibrate) navigator.vibrate(200);
+}
+
+// ==========================
+// 🛑 ANTI RUG FILTER
+// ==========================
 function isSafe(p){
   return (
-    p.liquidity?.usd > 50000 &&
-    p.volume?.h24 > 100000 &&
-    p.txns?.h24?.buys > p.txns?.h24?.sells &&
-    Math.abs(p.priceChange?.h24) < 40
+    p.liquidity?.usd > 30000 &&
+    p.volume?.h24 > 50000 &&
+    p.txns?.h24?.buys > p.txns?.h24?.sells
   );
 }
 
-// 🐋 WHALE DETECTION
-function getWhales(pairs){
-  return pairs.filter(p =>
-    p.liquidity?.usd > 150000 &&
-    p.volume?.h24 > 300000 &&
-    p.txns?.h24?.buys > p.txns?.h24?.sells
-  ).slice(0,10);
+// ==========================
+// 💰 LINK BUILDER
+// ==========================
+function dexLink(p){
+  return `https://dexscreener.com/${p.chainId}/${p.pairAddress}`;
 }
 
-// 🚨 VOLUME SPIKE DETECTION
-function getSpikes(pairs){
-  return pairs.filter(p =>
-    p.volume?.h1 > 0 &&
-    (p.volume.h24 / p.volume.h1) > 8 &&   // spike ratio
-    Math.abs(p.priceChange?.h24) < 15
-  ).slice(0,10);
-}
-
+// ==========================
 // 🔥 TRENDING
-function getTrending(pairs){
-  return pairs
-    .sort((a,b)=>b.volume.h24 - a.volume.h24)
-    .slice(0,10);
-}
-
-// 🧱 CARD UI
-function createCard(p, extra=""){
-  let link = p.url || "#";
-
-  return `
-  <div class="card">
-    <b>${p.baseToken.symbol}</b><br>
-    Vol: $${Math.round(p.volume.h24)}<br>
-    Change: ${p.priceChange.h24}%<br>
-    ${extra}<br>
-
-    <a href="${link}" target="_blank">
-      <button>💰 Buy</button>
-    </a>
-  </div>
-  `;
-}
-
-// 🔄 MAIN LOOP
-let lastAlerts = new Set();
-
-async function load(){
+// ==========================
+async function fetchTrending(){
+  let box = document.getElementById("trending");
   let pairs = await fetchData();
 
-  // 🛡️ filter safe only
-  pairs = pairs.filter(isSafe);
+  let filtered = pairs.filter(p =>
+    p.volume?.h24 > 200000 &&
+    p.priceChange?.h24 > 5 &&
+    isSafe(p)
+  ).slice(0,5);
 
-  let trending = getTrending(pairs);
-  let whales = getWhales(pairs);
-  let spikes = getSpikes(pairs);
-
-  // UI
-  document.getElementById("trending").innerHTML =
-    trending.map(p => createCard(p)).join("");
-
-  document.getElementById("whales").innerHTML =
-    whales.map(p => createCard(p, "🐋 Accumulating")).join("");
-
-  document.getElementById("spikes").innerHTML =
-    spikes.map(p => createCard(p, "🚨 EARLY SPIKE")).join("");
-
-  // 🔔 ALERT SYSTEM
-  spikes.forEach(p=>{
-    if(!lastAlerts.has(p.pairAddress)){
-      playAlert();
-      lastAlerts.add(p.pairAddress);
-    }
-  });
+  box.innerHTML = filtered.map(p=>`
+    <div class="item">
+      <b>${p.baseToken.symbol}</b><br>
+      Vol: $${Math.round(p.volume.h24)}<br>
+      Change: ${p.priceChange.h24.toFixed(2)}%<br>
+      <button onclick="window.open('${dexLink(p)}')">💰 Buy</button>
+    </div>
+  `).join("");
 }
 
-// ⏱️ AUTO REFRESH
-load();
-setInterval(load, 20000);
+// ==========================
+// 🐋 WHALES
+// ==========================
+async function fetchWhales(){
+  let box = document.getElementById("whales");
+  let pairs = await fetchData();
+
+  let whales = pairs.filter(p =>
+    p.volume?.h24 > 500000 &&
+    Math.abs(p.priceChange?.h24 || 0) < 10 &&
+    isSafe(p)
+  ).slice(0,5);
+
+  box.innerHTML = whales.map(p=>`
+    <div class="item">
+      <b>${p.baseToken.symbol}</b><br>
+      Vol: $${Math.round(p.volume.h24)}<br>
+      <span class="yellow">🐋 Accumulating</span><br>
+      <button onclick="window.open('${dexLink(p)}')">💰 View</button>
+    </div>
+  `).join("");
+}
+
+// ==========================
+// 🚨 SPIKE DETECTION
+// ==========================
+let lastSpikes = new Set();
+
+async function fetchSpikes(){
+  let box = document.getElementById("spikes");
+  let pairs = await fetchData();
+
+  let spikes = pairs.filter(p =>
+    p.volume?.h24 > 150000 &&
+    Math.abs(p.priceChange?.h24 || 0) < 8 &&
+    p.txns?.h24?.buys > p.txns?.h24?.sells &&
+    isSafe(p)
+  );
+
+  spikes = spikes.slice(0,6);
+
+  // ALERT NEW TOKENS
+  spikes.forEach(p=>{
+    if(!lastSpikes.has(p.pairAddress)){
+      triggerAlert();
+      lastSpikes.add(p.pairAddress);
+    }
+  });
+
+  box.innerHTML = spikes.map(p=>{
+    let pressure = p.txns.h24.buys - p.txns.h24.sells;
+
+    let tag =
+      pressure > 200 ? "🚨 HEAVY ACCUMULATION" :
+      pressure > 100 ? "🔥 BUILDING" :
+      "👀 EARLY ENTRY";
+
+    return `
+    <div class="item">
+      <b>${p.baseToken.symbol}</b><br>
+      Vol: $${Math.round(p.volume.h24)}<br>
+      Change: ${p.priceChange.h24.toFixed(2)}%<br>
+      <span class="green">${tag}</span><br>
+      <button onclick="window.open('${dexLink(p)}')">💰 Buy</button>
+    </div>
+    `;
+  }).join("");
+}
+
+// ==========================
+// ⏱ AUTO REFRESH
+// ==========================
+async function init(){
+  await fetchTrending();
+  await fetchWhales();
+  await fetchSpikes();
+}
+
+init();
+
+setInterval(()=>{
+  fetchTrending();
+  fetchWhales();
+  fetchSpikes();
+},20000);
 
 </script>
 
