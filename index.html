@@ -1,196 +1,164 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Sniper Terminal</title>
-
-<style>
-body { background:#0f0f0f; color:white; font-family:sans-serif; padding:10px; }
-h1 { text-align:center; color:#19f5b3; }
-
-.card {
-  background:#1c1c1c;
-  padding:15px;
-  border-radius:15px;
-  margin-bottom:15px;
-}
-
-.item {
-  background:#2a2a2a;
-  padding:12px;
-  border-radius:10px;
-  margin-top:10px;
-}
-
-button {
-  background:#19f5b3;
-  border:none;
-  padding:8px 12px;
-  border-radius:8px;
-  margin-top:8px;
-}
-
-.green { color:#00ffae }
-.yellow { color:#ffd700 }
-</style>
+<title>SNIPER PRO • Pump.fun</title>
+<script src="https://cdn.tailwindcss.com"></script>
 </head>
 
-<body>
+<body class="bg-black text-white p-3">
 
-<h1>🚀 Sniper Terminal</h1>
+<h1 class="text-xl font-bold mb-3">🚀 SNIPER PRO</h1>
 
-<div class="card">
-<h3>🔥 Trending</h3>
-<div id="trending">Loading...</div>
+<div class="flex gap-2 mb-3">
+  <button onclick="toggleSound()" class="bg-gray-800 px-2 py-1 rounded">🔊 Sound</button>
+  <button onclick="clearList()" class="bg-gray-800 px-2 py-1 rounded">Clear</button>
 </div>
 
-<div class="card">
-<h3>🐋 Whale Gems</h3>
-<div id="whales">Loading...</div>
-</div>
-
-<div class="card">
-<h3>🚨 Early Volume Spikes</h3>
-<div id="spikes">Loading...</div>
-</div>
+<div id="tokens" class="space-y-3"></div>
 
 <audio id="alertSound" src="https://actions.google.com/sounds/v1/alarms/beep_short.ogg"></audio>
 
 <script>
 
-// ✅ SERVICE WORKER
-if ("serviceWorker" in navigator) {
-  window.addEventListener("load", () => {
-    navigator.serviceWorker.register("./sw.js").catch(()=>{});
-  });
-}
+const API = "https://frontend-api.pump.fun/coins";
+let soundOn = true;
+let seen = new Set();
 
-// ==========================
-// 🔥 FETCH (WORKING)
-// ==========================
-async function fetchData(){
+Notification.requestPermission();
+
+// ================= FETCH =================
+async function fetchTokens() {
   try {
-    let res = await fetch("https://api.dexscreener.com/latest/dex/search/?q=usdt");
-    let data = await res.json();
-    return data.pairs || [];
-  } catch {
+    const res = await fetch(API);
+    const data = await res.json();
+
+    // remove junk tokens
+    return data.filter(t =>
+      t.symbol &&
+      t.symbol.length < 10 &&
+      t.usd_market_cap > 1000
+    ).slice(0, 80);
+
+  } catch (e) {
+    console.log("API error");
     return [];
   }
 }
 
-// ==========================
-// 🔔 ALERT
-// ==========================
-function alertUser(){
-  document.getElementById("alertSound").play().catch(()=>{});
-  if(navigator.vibrate) navigator.vibrate(200);
+// ================= ANALYSIS =================
+function analyze(t) {
+
+  let vol5 = t.volume_5m || 0;
+  let vol1h = t.volume_1h || 1;
+
+  let volumeSpike = vol5 / (vol1h / 12);
+
+  let buyers = t.unique_wallet_5m || 0;
+
+  let priceFlat = Math.abs(t.price_change_5m || 0) < 6;
+
+  let safety =
+    (t.top_10_holders_percentage || 50) < 35 &&
+    (t.dev_wallet_percentage || 50) < 20 &&
+    t.liquidity_locked === true;
+
+  let score =
+    (volumeSpike * 0.5) +
+    (buyers * 0.25) +
+    (priceFlat ? 1 : 0) +
+    (safety ? 1 : 0);
+
+  return { score, volumeSpike, buyers, priceFlat, safety };
 }
 
-// ==========================
-// 🛑 FILTER
-// ==========================
-function safe(p){
-  return p.liquidity?.usd > 20000 && p.volume?.h24 > 30000;
+// ================= ALERT =================
+function triggerAlert(token) {
+
+  if (soundOn) {
+    document.getElementById("alertSound").play();
+  }
+
+  if (Notification.permission === "granted") {
+    new Notification(`🚀 ${token.symbol} early momentum`);
+  }
 }
 
-// ==========================
-// 🔗 LINK
-// ==========================
-function link(p){
-  return `https://dexscreener.com/${p.chainId}/${p.pairAddress}`;
-}
+// ================= RENDER =================
+function render(tokens) {
 
-// ==========================
-// 🔥 TRENDING
-// ==========================
-async function trending(){
-  let el = document.getElementById("trending");
-  let pairs = await fetchData();
+  const container = document.getElementById("tokens");
 
-  let list = pairs.filter(p =>
-    p.priceChange?.h24 > 2 &&
-    p.volume?.h24 > 100000 &&
-    safe(p)
-  ).slice(0,5);
+  tokens.forEach(t => {
 
-  el.innerHTML = list.map(p=>`
-    <div class="item">
-      <b>${p.baseToken.symbol}</b><br>
-      Vol: $${Math.round(p.volume.h24)}<br>
-      Change: ${p.priceChange.h24.toFixed(2)}%<br>
-      <button onclick="window.open('${link(p)}')">💰 Buy</button>
-    </div>
-  `).join("") || "No data";
-}
+    const a = analyze(t);
 
-// ==========================
-// 🐋 WHALES
-// ==========================
-async function whales(){
-  let el = document.getElementById("whales");
-  let pairs = await fetchData();
+    // ONLY HIGH QUALITY SIGNALS
+    if (a.score < 3.5) return;
 
-  let list = pairs.filter(p =>
-    p.volume?.h24 > 400000 &&
-    Math.abs(p.priceChange?.h24 || 0) < 5 &&
-    safe(p)
-  ).slice(0,5);
+    // avoid duplicates
+    if (seen.has(t.mint)) return;
+    seen.add(t.mint);
 
-  el.innerHTML = list.map(p=>`
-    <div class="item">
-      <b>${p.baseToken.symbol}</b><br>
-      Vol: $${Math.round(p.volume.h24)}<br>
-      <span class="yellow">🐋 Accumulating</span><br>
-      <button onclick="window.open('${link(p)}')">View</button>
-    </div>
-  `).join("") || "No whales";
-}
+    triggerAlert(t);
 
-// ==========================
-// 🚨 SPIKES
-// ==========================
-let seen = new Set();
+    const el = document.createElement("div");
 
-async function spikes(){
-  let el = document.getElementById("spikes");
-  let pairs = await fetchData();
+    el.className = "bg-gray-900 p-3 rounded border border-gray-700";
 
-  let list = pairs.filter(p =>
-    p.volume?.h24 > 120000 &&
-    Math.abs(p.priceChange?.h24 || 0) < 6 &&
-    safe(p)
-  ).slice(0,6);
+    el.innerHTML = `
+      <div class="flex justify-between">
+        <b class="text-lg">${t.symbol}</b>
+        <span class="text-green-400">Score: ${a.score.toFixed(2)}</span>
+      </div>
 
-  list.forEach(p=>{
-    if(!seen.has(p.pairAddress)){
-      alertUser();
-      seen.add(p.pairAddress);
-    }
+      <div class="text-xs mt-2 text-gray-300">
+        MC: $${Math.round(t.usd_market_cap)} |
+        Age: ${Math.round(t.age / 60)}m
+      </div>
+
+      <div class="mt-2 text-sm">
+        📊 Vol Spike: ${a.volumeSpike.toFixed(2)}x <br>
+        👥 Buyers: ${a.buyers} <br>
+        📉 Flat: ${a.priceFlat ? "✅" : "❌"} <br>
+        🛡️ Safe: ${a.safety ? "✅" : "❌"}
+      </div>
+
+      <div class="flex gap-3 mt-3">
+        <a href="https://pump.fun/${t.mint}" target="_blank"
+           class="text-blue-400 text-sm">Buy</a>
+
+        <a href="https://dexscreener.com/solana/${t.mint}" target="_blank"
+           class="text-yellow-400 text-sm">Chart</a>
+      </div>
+    `;
+
+    container.prepend(el);
+
   });
-
-  el.innerHTML = list.map(p=>`
-    <div class="item">
-      <b>${p.baseToken.symbol}</b><br>
-      Vol: $${Math.round(p.volume.h24)}<br>
-      Change: ${p.priceChange.h24.toFixed(2)}%<br>
-      <span class="green">🚨 EARLY</span><br>
-      <button onclick="window.open('${link(p)}')">💰 Buy</button>
-    </div>
-  `).join("") || "No spikes";
 }
 
-// ==========================
-// 🚀 INIT
-// ==========================
-function run(){
-  trending();
-  whales();
-  spikes();
+// ================= LOOP =================
+async function run() {
+  const tokens = await fetchTokens();
+  render(tokens);
 }
 
+// ================= CONTROLS =================
+function toggleSound() {
+  soundOn = !soundOn;
+  alert("Sound: " + (soundOn ? "ON" : "OFF"));
+}
+
+function clearList() {
+  document.getElementById("tokens").innerHTML = "";
+  seen.clear();
+}
+
+// FAST REFRESH (REAL EDGE)
+setInterval(run, 5000);
 run();
-setInterval(run, 20000);
 
 </script>
 
