@@ -12,11 +12,7 @@ body {
   font-family:sans-serif;
   padding:10px;
 }
-
-h1 {
-  text-align:center;
-  color:#19f5b3;
-}
+h1 { text-align:center; color:#19f5b3; }
 
 .card {
   background:#1c1c1c;
@@ -53,62 +49,66 @@ button {
 
 <div class="card">
 <h3>🔥 Trending</h3>
-<div id="trending"></div>
+<div id="trending">Loading...</div>
 </div>
 
 <div class="card">
 <h3>🐋 Whale Gems</h3>
-<div id="whales"></div>
+<div id="whales">Loading...</div>
 </div>
 
 <div class="card">
 <h3>🚨 Early Volume Spikes</h3>
-<div id="spikes"></div>
+<div id="spikes">Loading...</div>
 </div>
 
 <audio id="alertSound" src="https://actions.google.com/sounds/v1/alarms/beep_short.ogg"></audio>
 
 <script>
 
-// ✅ SERVICE WORKER FIX
+// ✅ SERVICE WORKER SAFE REGISTER
 if ("serviceWorker" in navigator) {
   window.addEventListener("load", () => {
-    navigator.serviceWorker.register("./sw.js")
-      .then(() => console.log("✅ Service Worker Registered"))
-      .catch(err => console.error("❌ SW failed:", err));
+    navigator.serviceWorker.register("./sw.js").catch(()=>{});
   });
 }
 
 // ==========================
-// 🔥 FETCH DATA
+// 🔥 FETCH DATA (FIXED)
 // ==========================
 async function fetchData(){
-  let res = await fetch("https://api.dexscreener.com/latest/dex/tokens/eth");
-  let data = await res.json();
-  return data.pairs || [];
+  try {
+    let res = await fetch("https://api.dexscreener.com/latest/dex/pairs/ethereum");
+    let data = await res.json();
+    return data.pairs || [];
+  } catch (e){
+    console.log("API error", e);
+    return [];
+  }
 }
 
 // ==========================
-// 🔔 ALERT SYSTEM
+// 🔔 ALERT
 // ==========================
 function triggerAlert(){
-  document.getElementById("alertSound").play();
+  let audio = document.getElementById("alertSound");
+  audio.play().catch(()=>{});
   if (navigator.vibrate) navigator.vibrate(200);
 }
 
 // ==========================
-// 🛑 ANTI RUG FILTER
+// 🛑 SAFE FILTER
 // ==========================
 function isSafe(p){
   return (
-    p.liquidity?.usd > 30000 &&
-    p.volume?.h24 > 50000 &&
+    p.liquidity?.usd > 20000 &&
+    p.volume?.h24 > 30000 &&
     p.txns?.h24?.buys > p.txns?.h24?.sells
   );
 }
 
 // ==========================
-// 💰 LINK BUILDER
+// 🔗 LINK
 // ==========================
 function dexLink(p){
   return `https://dexscreener.com/${p.chainId}/${p.pairAddress}`;
@@ -121,20 +121,25 @@ async function fetchTrending(){
   let box = document.getElementById("trending");
   let pairs = await fetchData();
 
-  let filtered = pairs.filter(p =>
-    p.volume?.h24 > 200000 &&
-    p.priceChange?.h24 > 5 &&
+  if(!pairs.length){
+    box.innerHTML = "⚠️ No data";
+    return;
+  }
+
+  let list = pairs.filter(p =>
+    p.volume?.h24 > 150000 &&
+    p.priceChange?.h24 > 3 &&
     isSafe(p)
   ).slice(0,5);
 
-  box.innerHTML = filtered.map(p=>`
+  box.innerHTML = list.map(p=>`
     <div class="item">
       <b>${p.baseToken.symbol}</b><br>
       Vol: $${Math.round(p.volume.h24)}<br>
       Change: ${p.priceChange.h24.toFixed(2)}%<br>
       <button onclick="window.open('${dexLink(p)}')">💰 Buy</button>
     </div>
-  `).join("");
+  `).join("") || "No trending";
 }
 
 // ==========================
@@ -144,55 +149,52 @@ async function fetchWhales(){
   let box = document.getElementById("whales");
   let pairs = await fetchData();
 
-  let whales = pairs.filter(p =>
-    p.volume?.h24 > 500000 &&
-    Math.abs(p.priceChange?.h24 || 0) < 10 &&
+  let list = pairs.filter(p =>
+    p.volume?.h24 > 400000 &&
+    Math.abs(p.priceChange?.h24 || 0) < 8 &&
     isSafe(p)
   ).slice(0,5);
 
-  box.innerHTML = whales.map(p=>`
+  box.innerHTML = list.map(p=>`
     <div class="item">
       <b>${p.baseToken.symbol}</b><br>
       Vol: $${Math.round(p.volume.h24)}<br>
       <span class="yellow">🐋 Accumulating</span><br>
-      <button onclick="window.open('${dexLink(p)}')">💰 View</button>
+      <button onclick="window.open('${dexLink(p)}')">View</button>
     </div>
-  `).join("");
+  `).join("") || "No whales";
 }
 
 // ==========================
-// 🚨 SPIKE DETECTION
+// 🚨 SPIKES
 // ==========================
-let lastSpikes = new Set();
+let seen = new Set();
 
 async function fetchSpikes(){
   let box = document.getElementById("spikes");
   let pairs = await fetchData();
 
-  let spikes = pairs.filter(p =>
-    p.volume?.h24 > 150000 &&
-    Math.abs(p.priceChange?.h24 || 0) < 8 &&
+  let list = pairs.filter(p =>
+    p.volume?.h24 > 120000 &&
+    Math.abs(p.priceChange?.h24 || 0) < 6 &&
     p.txns?.h24?.buys > p.txns?.h24?.sells &&
     isSafe(p)
-  );
+  ).slice(0,6);
 
-  spikes = spikes.slice(0,6);
-
-  // ALERT NEW TOKENS
-  spikes.forEach(p=>{
-    if(!lastSpikes.has(p.pairAddress)){
+  list.forEach(p=>{
+    if(!seen.has(p.pairAddress)){
       triggerAlert();
-      lastSpikes.add(p.pairAddress);
+      seen.add(p.pairAddress);
     }
   });
 
-  box.innerHTML = spikes.map(p=>{
+  box.innerHTML = list.map(p=>{
     let pressure = p.txns.h24.buys - p.txns.h24.sells;
 
     let tag =
-      pressure > 200 ? "🚨 HEAVY ACCUMULATION" :
+      pressure > 200 ? "🚨 HEAVY" :
       pressure > 100 ? "🔥 BUILDING" :
-      "👀 EARLY ENTRY";
+      "👀 EARLY";
 
     return `
     <div class="item">
@@ -203,11 +205,11 @@ async function fetchSpikes(){
       <button onclick="window.open('${dexLink(p)}')">💰 Buy</button>
     </div>
     `;
-  }).join("");
+  }).join("") || "No spikes";
 }
 
 // ==========================
-// ⏱ AUTO REFRESH
+// 🚀 INIT
 // ==========================
 async function init(){
   await fetchTrending();
