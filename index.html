@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Momentum Scanner Pro</title>
+<title>Momentum Sniper Terminal</title>
 
 <style>
 body {
@@ -21,31 +21,20 @@ h1 { color: #00ff9f; }
   border-radius: 10px;
 }
 
-input, textarea {
-  width: 100%;
-  padding: 10px;
-  margin-top: 10px;
-  background: #222;
-  border: none;
-  color: white;
-  border-radius: 5px;
-}
-
-button {
-  width: 100%;
-  padding: 12px;
-  margin-top: 10px;
-  background: #00ff9f;
-  border: none;
-  border-radius: 5px;
-  font-weight: bold;
-}
-
 .item {
   background: #222;
   padding: 10px;
   margin-top: 10px;
   border-radius: 5px;
+}
+
+button {
+  margin-top: 5px;
+  padding: 6px;
+  background: #00ff9f;
+  border: none;
+  border-radius: 5px;
+  font-weight: bold;
 }
 
 .green { color: #00ff9f; }
@@ -56,321 +45,177 @@ button {
 
 <body>
 
-<h1>🚀 Momentum Scanner Pro</h1>
+<h1>🚀 Sniper Terminal</h1>
 
-<!-- LOG SIGNAL -->
 <div class="card">
-<h3>📝 Log Signal</h3>
-<input id="ticker" placeholder="Ticker">
-<textarea id="note" placeholder="Notes"></textarea>
-<button onclick="logSignal()">Log</button>
-</div>
-
-<!-- SIGNALS -->
-<div class="card">
-<h3>📋 Signals</h3>
-<div id="signals"></div>
-</div>
-
-<!-- WATCHLIST -->
-<div class="card">
-<h3>⭐ Watchlist</h3>
-<input id="wticker" placeholder="Ticker">
-<input id="hype" placeholder="Hype 1-10">
-<button onclick="addWatch()">Add</button>
-<div id="watchlist"></div>
-</div>
-
-<!-- TRENDING -->
-<div class="card">
-<h3>🔥 Trending Tokens</h3>
+<h3>🔥 Trending</h3>
 <div id="trending"></div>
 </div>
 
-<!-- WHALES -->
 <div class="card">
-<h3>🐋 Whale + Early Gems (Ranked)</h3>
+<h3>🐋 Whale Gems</h3>
 <div id="whales"></div>
 </div>
 
-<!-- VOLUME SPIKES -->
 <div class="card">
-<h3>🚨 Volume Spike (Early Entry)</h3>
+<h3>🚨 Early Volume Spikes</h3>
 <div id="spikes"></div>
 </div>
 
 <script>
-// STORAGE
-let signals = JSON.parse(localStorage.getItem("signals") || "[]");
-let watchlist = JSON.parse(localStorage.getItem("watchlist") || "[]");
+// 🔊 ALERT SOUND
+function playAlert() {
+  let audio = new Audio("https://actions.google.com/sounds/v1/alarms/beep_short.ogg");
+  audio.play();
+}
 
-// FETCH DATA (MULTI QUERY)
+// 🔔 ALERT POPUP
+function sendAlert(msg) {
+  alert(msg);
+  playAlert();
+}
+
+// 🛑 ANTI-RUG FILTER
+function isSafe(p) {
+  return (
+    p.liquidity?.usd > 50000 &&         // enough liquidity
+    p.volume?.h24 > 50000 &&            // real activity
+    p.txns?.h24?.buys > 20 &&           // not dead
+    p.txns?.h24?.sells > 5 &&           // not fake
+    p.priceUsd > 0.000000001            // avoid dust scams
+  );
+}
+
+// 📡 FETCH DATA
 async function fetchData() {
-  try {
-    const queries = ["eth", "bnb", "sol", "usdt", "pepe", "doge"];
-    let allPairs = [];
+  const queries = ["eth","bnb","sol","pepe","doge"];
+  let all = [];
 
-    for (let q of queries) {
-      const res = await fetch(`https://api.dexscreener.com/latest/dex/search?q=${q}`);
-      const data = await res.json();
-      if (data.pairs) allPairs = allPairs.concat(data.pairs);
-    }
-
-    return allPairs;
-  } catch {
-    return [];
-  }
-}
-
-// SCORE SYSTEM
-function scoreToken(p) {
-  let score = 0;
-
-  score += Math.min((p.volume?.h24 || 0) / 100000, 10);
-  score += Math.min((p.liquidity?.usd || 0) / 200000, 10);
-  score += ((p.txns?.h24?.buys || 0) - (p.txns?.h24?.sells || 0)) / 50;
-
-  return score;
-}
-
-// SIGNALS
-async function renderSignals() {
-  const box = document.getElementById("signals");
-  let html = "";
-
-  for (let s of signals) {
-    let res = await fetch(`https://api.dexscreener.com/latest/dex/search?q=${s.ticker}`);
+  for (let q of queries) {
+    let res = await fetch(`https://api.dexscreener.com/latest/dex/search?q=${q}`);
     let data = await res.json();
-    let p = data.pairs?.[0];
-    if (!p) continue;
-
-    let change = p.priceChange?.h24 || 0;
-
-    let signal =
-      change > 20 ? "🚀 STRONG BUY" :
-      change > 5 ? "📈 MOMENTUM" :
-      "⚠️ WEAK";
-
-    html += `
-    <div class="item">
-      <b>${s.ticker}</b><br>
-      $${p.priceUsd}<br>
-      <span class="${change>0?'green':'red'}">${change.toFixed(2)}%</span><br>
-      ${signal}
-    </div>`;
+    if (data.pairs) all = all.concat(data.pairs);
   }
 
-  box.innerHTML = html || "No signals";
+  return all;
 }
 
-// WATCHLIST
-async function renderWatch() {
-  const box = document.getElementById("watchlist");
-  let html = "";
-
-  for (let w of watchlist) {
-    let res = await fetch(`https://api.dexscreener.com/latest/dex/search?q=${w.ticker}`);
-    let data = await res.json();
-    let p = data.pairs?.[0];
-    if (!p) continue;
-
-    let change = p.priceChange?.h24 || 0;
-
-    html += `
-    <div class="item">
-      <b>${w.ticker}</b> (Hype ${w.hype})<br>
-      $${p.priceUsd}<br>
-      <span class="${change>0?'green':'red'}">
-      ${change.toFixed(2)}%
-      </span>
-    </div>`;
-  }
-
-  box.innerHTML = html || "Empty";
+// 💰 BUY LINK
+function buyLink(p) {
+  return `https://dexscreener.com/${p.chainId}/${p.pairAddress}`;
 }
 
-// TRENDING (NO DUPES)
+// 🔥 TRENDING
 async function fetchTrending() {
-  const box = document.getElementById("trending");
   let pairs = await fetchData();
-
   let seen = new Set();
 
   let list = pairs
-    .filter(p => (p.priceChange?.h24 || 0) > 10)
+    .filter(p => isSafe(p))
+    .filter(p => p.priceChange?.h24 > 10)
     .filter(p => {
-      let sym = p.baseToken.symbol;
-      if (seen.has(sym)) return false;
-      seen.add(sym);
+      let s = p.baseToken.symbol;
+      if (seen.has(s)) return false;
+      seen.add(s);
       return true;
     })
     .sort((a,b)=>b.priceChange.h24-a.priceChange.h24)
-    .slice(0,10);
+    .slice(0,8);
 
-  let html = list.map(p=>`
+  document.getElementById("trending").innerHTML =
+    list.map(p=>`
     <div class="item">
       <b>${p.baseToken.symbol}</b><br>
       $${p.priceUsd}<br>
-      <span class="green">${p.priceChange.h24.toFixed(2)}%</span>
-    </div>`).join("");
-
-  box.innerHTML = html || "No trends";
-}
-
-// WHALES (FIXED)
-async function fetchWhales() {
-  const box = document.getElementById("whales");
-  box.innerHTML = "Scanning smart money...";
-
-  let pairs = await fetchData();
-
-  let clean = pairs.filter(p =>
-    p.liquidity?.usd &&
-    p.volume?.h24 &&
-    p.txns?.h24
-  );
-
-  let whales = clean.filter(p =>
-    p.liquidity.usd > 50000 &&
-    p.volume.h24 > 100000 &&
-    Math.abs(p.priceChange?.h24 || 0) < 25 &&
-    (p.txns.h24.buys || 0) > (p.txns.h24.sells || 0)
-  );
-
-  let seen = new Set();
-  whales = whales.filter(p => {
-    let sym = p.baseToken.symbol;
-    if (seen.has(sym)) return false;
-    seen.add(sym);
-    return true;
-  });
-
-  whales.sort((a,b)=>scoreToken(b)-scoreToken(a));
-  whales = whales.slice(0,10);
-
-  let html = whales.map(p=>{
-    let score = scoreToken(p).toFixed(1);
-
-    let tag =
-      score > 15 ? "🚨 TOP GEM" :
-      score > 10 ? "🔥 STRONG" :
-      "🐋 ACCUMULATION";
-
-    return `
-    <div class="item">
-      <b>${p.baseToken.symbol}</b><br>
-      $${p.priceUsd}<br>
-      Vol: $${Math.round(p.volume.h24)}<br>
-      Liq: $${Math.round(p.liquidity.usd)}<br>
-      Score: ${score}<br>
-      <span class="yellow">${tag}</span>
-    </div>`;
-  }).join("");
-
-  box.innerHTML = html || "No whale activity";
-}
-
-// 🚨 VOLUME SPIKES (EARLY ENTRY)
-async function fetchSpikes() {
-  const box = document.getElementById("spikes");
-  box.innerHTML = "Scanning early entries...";
-
-  let pairs = await fetchData();
-
-  let clean = pairs.filter(p =>
-    p.volume?.h24 &&
-    p.liquidity?.usd &&
-    p.txns?.h24
-  );
-
-  let spikes = clean.filter(p =>
-    p.volume.h24 > 150000 &&
-    p.liquidity.usd > 50000 &&
-    Math.abs(p.priceChange?.h24 || 0) < 8 &&
-    (p.txns.h24.buys || 0) > (p.txns.h24.sells || 0)
-  );
-
-  let seen = new Set();
-  spikes = spikes.filter(p => {
-    let sym = p.baseToken.symbol;
-    if (seen.has(sym)) return false;
-    seen.add(sym);
-    return true;
-  });
-
-  spikes.sort((a,b)=>
-    (b.txns.h24.buys - b.txns.h24.sells) -
-    (a.txns.h24.buys - a.txns.h24.sells)
-  );
-
-  spikes = spikes.slice(0,8);
-
-  let html = spikes.map(p => {
-    let buys = p.txns.h24.buys || 0;
-    let sells = p.txns.h24.sells || 0;
-    let pressure = buys - sells;
-
-    let tag =
-      pressure > 200 ? "🚨 HEAVY ACCUMULATION" :
-      pressure > 100 ? "🔥 BUILDING" :
-      "👀 EARLY";
-
-    return `
-    <div class="item">
-      <b>${p.baseToken.symbol}</b><br>
-      $${p.priceUsd}<br>
-      Vol: $${Math.round(p.volume.h24)}<br>
-      Price Change: ${p.priceChange.h24.toFixed(2)}%<br>
-      Buy Pressure: ${pressure}<br>
-      <span class="yellow">${tag}</span>
+      <span class="green">${p.priceChange.h24.toFixed(1)}%</span><br>
+      <button onclick="window.open('${buyLink(p)}')">💰 View</button>
     </div>
-    `;
-  }).join("");
-
-  box.innerHTML = html || "No early spikes";
+    `).join("");
 }
 
-// ACTIONS
-function logSignal() {
-  let t = ticker.value;
-  if (!t) return alert("Enter ticker");
-  signals.push({ticker:t});
-  localStorage.setItem("signals", JSON.stringify(signals));
-  renderSignals();
+// 🐋 WHALES
+async function fetchWhales() {
+  let pairs = await fetchData();
+  let seen = new Set();
+
+  let whales = pairs
+    .filter(p => isSafe(p))
+    .filter(p =>
+      p.volume.h24 > 100000 &&
+      Math.abs(p.priceChange.h24) < 20 &&
+      p.txns.h24.buys > p.txns.h24.sells
+    )
+    .filter(p=>{
+      let s=p.baseToken.symbol;
+      if(seen.has(s)) return false;
+      seen.add(s);
+      return true;
+    })
+    .slice(0,8);
+
+  document.getElementById("whales").innerHTML =
+    whales.map(p=>`
+    <div class="item">
+      <b>${p.baseToken.symbol}</b><br>
+      Vol: $${Math.round(p.volume.h24)}<br>
+      <span class="yellow">🐋 Accumulating</span><br>
+      <button onclick="window.open('${buyLink(p)}')">💰 View</button>
+    </div>
+    `).join("");
 }
 
-function addWatch() {
-  let t = wticker.value;
-  let h = hype.value;
-  if (!t) return alert("Enter ticker");
-  watchlist.push({ticker:t, hype:h});
-  localStorage.setItem("watchlist", JSON.stringify(watchlist));
-  renderWatch();
+// 🚨 SPIKES + ALERT
+let alerted = new Set();
+
+async function fetchSpikes() {
+  let pairs = await fetchData();
+  let seen = new Set();
+
+  let spikes = pairs
+    .filter(p => isSafe(p))
+    .filter(p =>
+      p.volume.h24 > 150000 &&
+      Math.abs(p.priceChange.h24) < 8 &&
+      p.txns.h24.buys > p.txns.h24.sells
+    )
+    .filter(p=>{
+      let s=p.baseToken.symbol;
+      if(seen.has(s)) return false;
+      seen.add(s);
+      return true;
+    })
+    .slice(0,6);
+
+  spikes.forEach(p=>{
+    if (!alerted.has(p.baseToken.symbol)) {
+      sendAlert(`🚨 EARLY GEM: ${p.baseToken.symbol}`);
+      alerted.add(p.baseToken.symbol);
+    }
+  });
+
+  document.getElementById("spikes").innerHTML =
+    spikes.map(p=>`
+    <div class="item">
+      <b>${p.baseToken.symbol}</b><br>
+      Vol: $${Math.round(p.volume.h24)}<br>
+      Change: ${p.priceChange.h24.toFixed(2)}%<br>
+      <span class="green">EARLY ENTRY</span><br>
+      <button onclick="window.open('${buyLink(p)}')">💰 View</button>
+    </div>
+    `).join("");
 }
 
-// AUTO REFRESH
+// AUTO LOOP
 setInterval(()=>{
-  renderSignals();
-  renderWatch();
   fetchTrending();
   fetchWhales();
   fetchSpikes();
 },20000);
 
 // INIT
-renderSignals();
-renderWatch();
 fetchTrending();
 fetchWhales();
 fetchSpikes();
-
-// SERVICE WORKER
-if ("serviceWorker" in navigator) {
-  window.addEventListener("load", () => {
-    navigator.serviceWorker.register("./sw.js")
-      .then(()=>console.log("SW ready"));
-  });
-}
 </script>
 
 </body>
