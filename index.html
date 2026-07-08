@@ -1,191 +1,63 @@
-<!DOCTYPE html>
-<html lang="en">
+<!DOCTYPE html><html lang="en">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>🚀 Momentum Scanner Pro</title>
+<title>🚀 Momentum Scanner Pro</title><script src="https://cdn.jsdelivr.net/npm/chart.js"></script><style>
+body{margin:0;font-family:system-ui;background:#0a0a0a;color:#eee}
+.container{max-width:1000px;margin:auto;padding:16px}
+h1{text-align:center;color:#00ff9f}
 
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+.section{background:#151515;padding:16px;border-radius:12px;margin:16px 0}
 
-<style>
-:root{
-  --bg:#0a0a0a;
-  --card:#151515;
-  --accent:#00ff9f;
-  --text:#eaeaea;
-  --muted:#888;
+input,textarea,button{
+width:100%;padding:10px;margin-top:8px;
+border-radius:8px;border:1px solid #333;
+background:#1f1f1f;color:#fff
 }
 
-body{
-  margin:0;
-  font-family:system-ui;
-  background:var(--bg);
-  color:var(--text);
-}
+button{background:#00ff9f;color:#000;font-weight:bold;cursor:pointer}
 
-.container{max-width:1100px;margin:auto;padding:16px}
-
-h1{text-align:center;color:var(--accent)}
-
-.section{
-  background:var(--card);
-  padding:16px;
-  border-radius:14px;
-  margin:16px 0;
-}
-
-input,textarea,button,select{
-  width:100%;
-  padding:10px;
-  border-radius:8px;
-  border:1px solid #333;
-  background:#1f1f1f;
-  color:#fff;
-  margin-top:6px;
-}
-
-button{
-  background:var(--accent);
-  color:#000;
-  font-weight:bold;
-  cursor:pointer;
-}
-
-button.secondary{background:#333;color:#fff}
-
-.grid{
-  display:grid;
-  grid-template-columns:repeat(auto-fit,minmax(150px,1fr));
-  gap:10px;
-}
-
-.card{
-  background:#1c1c1c;
-  padding:12px;
-  border-radius:10px;
-}
-
-.table{
-  width:100%;
-  border-collapse:collapse;
-}
-
-.table th,.table td{
-  padding:10px;
-  border-bottom:1px solid #333;
-}
+.table{width:100%;border-collapse:collapse}
+.table th,.table td{padding:10px;border-bottom:1px solid #333}
 
 .green{color:#00ff9f}
 .red{color:#ff5a5a}
 
-.badge{
-  padding:4px 6px;
-  border-radius:6px;
-  font-size:0.8em;
-  background:#222;
-}
-
-.loading{
-  opacity:0.5;
-  pointer-events:none;
-}
-
 .modal{
-  position:fixed;
-  top:0;left:0;
-  width:100%;height:100%;
-  background:rgba(0,0,0,0.9);
-  display:none;
-  justify-content:center;
-  align-items:center;
+position:fixed;top:0;left:0;width:100%;height:100%;
+background:rgba(0,0,0,0.9);display:none;
+justify-content:center;align-items:center;
 }
 
 .modal-content{
-  background:#111;
-  padding:20px;
-  border-radius:12px;
-  width:95%;
-  max-width:900px;
+background:#111;padding:20px;border-radius:12px;width:95%;
 }
 
 canvas{height:400px!important}
-
-.small{color:var(--muted);font-size:0.8em}
-</style>
-</head>
-
-<body>
-<div class="container">
-
-<h1>🚀 Momentum Scanner Pro</h1>
-
-<!-- DISCOVERY -->
-<div class="section">
-<h3>🔍 Discovery</h3>
-<div class="grid">
-<button onclick="openLink('https://dexscreener.com/solana/pumpfun?rankBy=trendingScoreH6&order=desc')">Dex Trending</button>
-<button onclick="openLink('https://pump.fun/coins')">pump.fun</button>
-<button onclick="openLink('https://x.com/search?q=new%20memecoin&f=live')">X Scan</button>
-</div>
-</div>
-
-<!-- SIGNAL -->
-<div class="section">
+</style></head><body>
+<div class="container"><h1>🚀 Momentum Scanner Pro</h1><div class="section">
 <h3>📝 Log Signal</h3>
 <input id="logTicker" placeholder="Ticker">
 <input id="logCA" placeholder="Contract Address">
-<input id="logSource" placeholder="Source">
 <textarea id="logNotes"></textarea>
 <button onclick="logSignal()">Log</button>
-</div>
-
-<div class="section">
+</div><div class="section">
 <h3>📋 Signals</h3>
 <div id="signals"></div>
-</div>
-
-<!-- WATCHLIST -->
-<div class="section">
-<h3>⭐ Watchlist</h3>
-
-<div class="grid">
-<input id="wlTicker" placeholder="Ticker">
+</div><div class="section">
+<h3>⭐ Watchlist</h3><input id="wlTicker" placeholder="Ticker">
 <input id="wlCA" placeholder="CA">
-<input id="wlHype" type="number" placeholder="Hype 1-10">
-<input id="wlMC" placeholder="Market Cap">
-</div>
-
-<button onclick="addWatch()">Add</button>
-
-<div class="grid">
-<select id="sortBy" onchange="renderWatch()">
-<option value="momentum">Sort: Momentum</option>
-<option value="hype">Hype</option>
-<option value="liquidity">Liquidity</option>
-<option value="change">24h %</option>
-</select>
-
-<button class="secondary" onclick="exportJSON()">Export JSON</button>
-<button class="secondary" onclick="exportCSV()">Export CSV</button>
-</div>
+<input id="wlHype" type="number" placeholder="Hype 1-10"><button onclick="addWatch()">Add</button>
 
 <div id="watchlist"></div>
-
-</div>
-
-</div>
-
-<!-- MODALS -->
-<div id="chartModal" class="modal">
+</div></div><div id="chartModal" class="modal">
 <div class="modal-content">
 <button onclick="closeModal()">Close</button>
 <canvas id="chart"></canvas>
 </div>
-</div>
+</div><script>
 
-<script>
-
-// ================= STATE =================
+// ===== STATE =====
 let signals = JSON.parse(localStorage.getItem('signals'))||[]
 let watchlist = JSON.parse(localStorage.getItem('watch'))||[]
 let chartInstance=null
@@ -195,20 +67,15 @@ localStorage.setItem('signals',JSON.stringify(signals))
 localStorage.setItem('watch',JSON.stringify(watchlist))
 }
 
-// ================= UTIL =================
-function openLink(url){window.open(url,'_blank')}
-
-// ================= SIGNAL =================
+// ===== SIGNAL =====
 function logSignal(){
-let ticker=document.getElementById('logTicker').value.toUpperCase()
-if(!ticker)return alert("Ticker required")
+let t=logTicker.value.toUpperCase()
+if(!t)return alert("Ticker required")
 
 signals.push({
-ticker,
-ca:document.getElementById('logCA').value,
-source:document.getElementById('logSource').value,
-notes:document.getElementById('logNotes').value,
-time:Date.now()
+ticker:t,
+ca:logCA.value,
+notes:logNotes.value
 })
 
 save()
@@ -219,45 +86,36 @@ function renderSignals(){
 let el=document.getElementById('signals')
 el.innerHTML=''
 
-signals.slice().reverse().forEach(s=>{
-let d=document.createElement('div')
-d.className='card'
-d.innerHTML=`
-<b>${s.ticker}</b><br>
-<span class="small">${s.source}</span><br>
-${s.notes}
+signals.forEach(s=>{
+el.innerHTML+=`
+<div style="background:#1c1c1c;padding:10px;margin:6px 0;border-radius:8px">
+<b>${s.ticker}</b><br>${s.notes}
 <button onclick="prefill('${s.ticker}','${s.ca}')">→</button>
-`
-el.appendChild(d)
+</div>`
 })
 }
 
 function prefill(t,ca){
 wlTicker.value=t
-wlCA.value=ca||''
+wlCA.value=ca
 }
 
-// ================= WATCHLIST =================
+// ===== WATCHLIST =====
 function addWatch(){
 let t=wlTicker.value.toUpperCase()
 if(!t)return alert("Ticker required")
 
-let obj={
+watchlist.push({
 ticker:t,
 ca:wlCA.value,
-hype:parseInt(wlHype.value)||5,
-mc:wlMC.value
-}
-
-let i=watchlist.findIndex(x=>x.ticker===t)
-if(i>=0)watchlist[i]={...watchlist[i],...obj}
-else watchlist.push(obj)
+hype:parseInt(wlHype.value)||5
+})
 
 save()
 renderWatch()
 }
 
-// ================= API =================
+// ===== API =====
 async function fetchPrice(ca){
 try{
 let r=await fetch(`https://public-api.birdeye.so/defi/price?address=${ca}`,{
@@ -268,97 +126,63 @@ return d.data||null
 }catch{return null}
 }
 
-// ================= MOMENTUM =================
+// ===== MOMENTUM =====
 function calcMomentum(x){
 let hype=x.hype||5
 let liq=x.liquidity||1000
-let recency=(Date.now()-(x.lastUpdate||Date.now()))/60000
-
-return (hype*2) * Math.log10(liq+1) * (1/(recency+1))
+return hype*Math.log10(liq+1)
 }
 
-// ================= RENDER =================
+// ===== RENDER =====
 async function renderWatch(){
-
-let container=document.getElementById('watchlist')
-container.innerHTML="Loading..."
+let html=`<table class="table">
+<tr><th>T</th><th>$</th><th>%</th><th>Liq</th><th>Score</th></tr>`
 
 for(let w of watchlist){
 if(w.ca){
-let data=await fetchPrice(w.ca)
-if(data){
-w.price=data.value
-w.change=data.priceChange24h
-w.liquidity=data.liquidity
-w.lastUpdate=Date.now()
+let d=await fetchPrice(w.ca)
+if(d){
+w.price=d.value
+w.change=d.priceChange24h
+w.liquidity=d.liquidity
 }
 }
-w.momentum=calcMomentum(w)
-}
+w.score=calcMomentum(w)
 
-let sort=document.getElementById('sortBy').value
-watchlist.sort((a,b)=>b[sort]-a[sort])
-
-let html=`<table class="table">
-<tr>
-<th>T</th><th>$</th><th>%</th><th>Liq</th><th>Score</th><th></th>
-</tr>`
-
-watchlist.forEach((w,i)=>{
 html+=`
 <tr>
 <td>${w.ticker}</td>
 <td class="green">${w.price?Number(w.price).toFixed(6):'-'}</td>
 <td class="${w.change>0?'green':'red'}">${w.change? w.change.toFixed(2)+'%':'-'}</td>
 <td>${w.liquidity?Number(w.liquidity).toLocaleString():'-'}</td>
-<td>${w.momentum.toFixed(2)}</td>
-<td>
-<button onclick="openDex('${w.ca}')">📈</button>
-<button onclick="showChart('${w.ca}')">📊</button>
-</td>
+<td>${w.score.toFixed(2)}</td>
 </tr>`
-})
+}
 
 html+='</table>'
-container.innerHTML=html
+watchlist.innerHTML=html
 save()
 }
 
-// ================= DEX =================
-function openDex(ca){
-window.open(`https://dexscreener.com/solana/${ca}`,'_blank')
-}
-
-// ================= CHART =================
+// ===== CHART =====
 async function showChart(ca){
-
-let modal=document.getElementById('chartModal')
-modal.style.display='flex'
+chartModal.style.display='flex'
 
 let ctx=document.getElementById('chart').getContext('2d')
-
 if(chartInstance)chartInstance.destroy()
 
-let res=await fetch(`https://public-api.birdeye.so/defi/history_price?address=${ca}&type=1H`,{
+let r=await fetch(`https://public-api.birdeye.so/defi/history_price?address=${ca}&type=1H`,{
 headers:{'x-chain':'solana'}
 })
 
-let d=await res.json()
+let d=await r.json()
 
 let labels=d.data.items.map(i=>new Date(i.unixTime*1000).toLocaleTimeString())
 let prices=d.data.items.map(i=>i.value)
 
 chartInstance=new Chart(ctx,{
 type:'line',
-data:{
-labels,
-datasets:[{
-label:'Price',
-data:prices,
-borderColor:'#00ff9f',
-fill:true
-}]
-}
+data:{labels,datasets:[{data:prices,borderColor:'#00ff9f'}]}
 })
 }
 
@@ -366,40 +190,18 @@ function closeModal(){
 chartModal.style.display='none'
 }
 
-// ================= EXPORT =================
-function exportJSON(){
-let blob=new Blob([JSON.stringify(watchlist,null,2)],{type:'application/json'})
-download(blob,'watchlist.json')
-}
-
-function exportCSV(){
-let rows=["Ticker,Price,Change,Liquidity,Score"]
-watchlist.forEach(w=>{
-rows.push(`${w.ticker},${w.price},${w.change},${w.liquidity},${w.momentum}`)
-})
-download(new Blob([rows.join("\n")]),'watchlist.csv')
-}
-
-function download(blob,name){
-let a=document.createElement('a')
-a.href=URL.createObjectURL(blob)
-a.download=name
-a.click()
-}
-
-// ================= INIT =================
+// ===== INIT =====
 renderSignals()
 renderWatch()
 
-// ================= PWA =================
-if('serviceWorker' in navigator){
-const sw=`
-self.addEventListener('install',e=>self.skipWaiting())
-self.addEventListener('fetch',e=>{})
-`
-navigator.serviceWorker.register(URL.createObjectURL(new Blob([sw])))
+// ===== SERVICE WORKER (FIXED) =====
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("./sw.js")
+      .then(() => console.log("✅ Service Worker Registered"))
+      .catch(err => console.error("❌ SW failed:", err));
+  });
 }
 
-</script>
-</body>
+</script></body>
 </html>
