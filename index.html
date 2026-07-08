@@ -53,7 +53,7 @@ button {
 
 <h1>🚀 Momentum Scanner Pro</h1>
 
-<!-- SIGNAL -->
+<!-- LOG SIGNAL -->
 <div class="card">
 <h3>📝 Log Signal</h3>
 <input id="ticker" placeholder="Ticker">
@@ -62,6 +62,7 @@ button {
 <button onclick="logSignal()">Log</button>
 </div>
 
+<!-- SIGNALS -->
 <div class="card">
 <h3>📋 Signals</h3>
 <div id="signals"></div>
@@ -79,36 +80,60 @@ button {
 
 <!-- TRENDING -->
 <div class="card">
-<h3>🔥 Trending</h3>
+<h3>🔥 Trending Tokens</h3>
 <div id="trending"></div>
 </div>
 
-<!-- 🐋 WHALE + EARLY -->
+<!-- WHALES -->
 <div class="card">
-<h3>🐋 Whale Activity + Early Pumps</h3>
+<h3>🐋 Whale + Early Gems (Ranked)</h3>
 <div id="whales"></div>
 </div>
 
 <script>
+// STORAGE
 let signals = JSON.parse(localStorage.getItem("signals") || "[]");
 let watchlist = JSON.parse(localStorage.getItem("watchlist") || "[]");
 
-// FETCH DATA
-async function fetchData(q="sol") {
-  const res = await fetch(`https://api.dexscreener.com/latest/dex/search?q=${q}`);
-  const data = await res.json();
-  return data.pairs || [];
+// 🔥 MULTI-CHAIN DATA FETCH
+async function fetchData() {
+  try {
+    const queries = ["eth", "bnb", "sol", "usdt", "pepe", "doge"];
+    let allPairs = [];
+
+    for (let q of queries) {
+      const res = await fetch(`https://api.dexscreener.com/latest/dex/search?q=${q}`);
+      const data = await res.json();
+      if (data.pairs) allPairs = allPairs.concat(data.pairs);
+    }
+
+    return allPairs;
+
+  } catch {
+    return [];
+  }
 }
 
-// SIGNALS
+// 🧠 SCORE SYSTEM (IMPORTANT)
+function scoreToken(p) {
+  let score = 0;
+
+  score += Math.min(p.volume.h24 / 100000, 10);     // volume weight
+  score += Math.min(p.liquidity.usd / 200000, 10);  // liquidity weight
+  score += (p.txns.h24.buys - p.txns.h24.sells) / 50; // buy pressure
+
+  return score;
+}
+
+// 📋 SIGNALS
 async function renderSignals() {
   const box = document.getElementById("signals");
   let html = "";
 
   for (let s of signals) {
-    let pairs = await fetchData(s.ticker);
-    let p = pairs[0];
-
+    let res = await fetch(`https://api.dexscreener.com/latest/dex/search?q=${s.ticker}`);
+    let data = await res.json();
+    let p = data.pairs?.[0];
     if (!p) continue;
 
     let change = p.priceChange.h24;
@@ -119,7 +144,7 @@ async function renderSignals() {
     html += `
     <div class="item">
       <b>${s.ticker}</b><br>
-      Price: $${p.priceUsd}<br>
+      $${p.priceUsd}<br>
       <span class="${change>0?'green':'red'}">${change}%</span><br>
       ${signal}
     </div>`;
@@ -128,14 +153,15 @@ async function renderSignals() {
   box.innerHTML = html || "No signals";
 }
 
-// WATCHLIST
+// ⭐ WATCHLIST
 async function renderWatch() {
   const box = document.getElementById("watchlist");
   let html = "";
 
   for (let w of watchlist) {
-    let pairs = await fetchData(w.ticker);
-    let p = pairs[0];
+    let res = await fetch(`https://api.dexscreener.com/latest/dex/search?q=${w.ticker}`);
+    let data = await res.json();
+    let p = data.pairs?.[0];
     if (!p) continue;
 
     html += `
@@ -171,7 +197,7 @@ async function fetchTrending() {
   box.innerHTML = html || "No trends";
 }
 
-// 🐋 WHALE + EARLY DETECTION
+// 🐋 WHALE + EARLY (RANKED)
 async function fetchWhales() {
   const box = document.getElementById("whales");
   box.innerHTML = "Scanning smart money...";
@@ -179,16 +205,24 @@ async function fetchWhales() {
   let pairs = await fetchData();
 
   let whales = pairs.filter(p =>
-    p.liquidity.usd > 50000 && // real money
-    p.volume.h24 > 100000 &&  // strong activity
-    p.priceChange.h24 < 15    // NOT pumped yet
-  ).slice(0,10);
+    p.liquidity.usd > 100000 &&
+    p.volume.h24 > 200000 &&
+    Math.abs(p.priceChange.h24) < 20 &&
+    p.txns.h24.buys > p.txns.h24.sells
+  );
+
+  // 🧠 SORT BY SCORE
+  whales.sort((a,b)=>scoreToken(b)-scoreToken(a));
+
+  whales = whales.slice(0, 12);
 
   let html = "";
 
   whales.forEach(p => {
-    let tag = "🐋 ACCUMULATION";
-    if (p.volume.h24 > 500000) tag = "🚨 EARLY GEM";
+    let score = scoreToken(p).toFixed(1);
+    let tag = score > 15 ? "🚨 TOP GEM" :
+              score > 10 ? "🔥 STRONG" :
+              "🐋 ACCUMULATION";
 
     html += `
     <div class="item">
@@ -196,6 +230,7 @@ async function fetchWhales() {
       Price: $${p.priceUsd}<br>
       Vol: $${Math.round(p.volume.h24)}<br>
       Liquidity: $${Math.round(p.liquidity.usd)}<br>
+      Score: ${score}<br>
       <span class="yellow">${tag}</span>
     </div>`;
   });
@@ -238,7 +273,8 @@ fetchWhales();
 // SERVICE WORKER
 if ("serviceWorker" in navigator) {
   window.addEventListener("load", () => {
-    navigator.serviceWorker.register("./sw.js");
+    navigator.serviceWorker.register("./sw.js")
+      .then(()=>console.log("SW ready"));
   });
 }
 </script>
